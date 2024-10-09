@@ -24,7 +24,6 @@ public class MainActivity extends AppCompatActivity {
     private Button mBotaoVerdadeiro;
     private Button mBotaoFalso;
     private Button mBotaoProximo;
-    private Button mBotaoCadastra;
     private Button mBotaoMostra;
     private Button mBotaoDeleta;
 
@@ -48,11 +47,15 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean mEhColador;
 
+    private RespostaDB mRespostaDB;
+
     @Override
     protected void onCreate(Bundle instanciaSalva) {
         super.onCreate(instanciaSalva);
         setContentView(R.layout.activity_main);
         //Log.d(TAG, "onCreate()");
+        mRespostaDB = new RespostaDB(this);
+        mRespostaDB.deleteAllRespostas();
         if (instanciaSalva != null) {
             mIndiceAtual = instanciaSalva.getInt(CHAVE_INDICE, 0);
         }
@@ -99,77 +102,78 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mBotaoCadastra = (Button) findViewById(R.id.botao_cadastra);
-        mBotaoCadastra.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                /*
-                  Acesso ao SQLite
-                */
-                if (mQuestoesDb == null) {
-                    mQuestoesDb = new QuestaoDB(getBaseContext());
-                }
-                int indice = 0;
-                mQuestoesDb.addQuestao(mBancoDeQuestoes[indice++]);
-                mQuestoesDb.addQuestao(mBancoDeQuestoes[indice++]);
-            }
-        });
-
         //Cursor cur = mQuestoesDb.queryQuestao ("_id = ?", val);////(null, null);
         //String [] val = {"1"};
         mBotaoMostra = (Button) findViewById(R.id.botao_mostra_questoes);
         mBotaoMostra.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                /*
-                  Acesso ao SQLite
-                */
-                if (mQuestoesDb == null) return;
+        /*
+          Acesso ao SQLite para exibir as respostas armazenadas
+        */
+                if (mRespostaDB == null) return;
+
                 if (mTextViewQuestoesArmazenadas == null) {
                     mTextViewQuestoesArmazenadas = (TextView) findViewById(R.id.texto_questoes_a_apresentar);
                 } else {
-                    mTextViewQuestoesArmazenadas.setText("");
+                    mTextViewQuestoesArmazenadas.setText(""); // Limpar o conteúdo antes de mostrar novas respostas
                 }
-                Cursor cursor = mQuestoesDb.queryQuestao(null, null);
+
+                Cursor cursor = mRespostaDB.getAllRespostas(); // Obter todas as respostas
+
                 if (cursor != null) {
                     if (cursor.getCount() == 0) {
-                        mTextViewQuestoesArmazenadas.setText("Nada a apresentar");
-                        Log.i("MSGS", "Nenhum resultado");
-                    }
-                    //Log.i("MSGS", Integer.toString(cursor.getCount()));
-                    //Log.i("MSGS", "cursor não nulo!");
-                    try {
+                        mTextViewQuestoesArmazenadas.setText("Nenhuma resposta registrada.");
+                        Log.i("MSGS", "Nenhuma resposta encontrada.");
+                    } else {
+                        StringBuilder builder = new StringBuilder();
                         cursor.moveToFirst();
                         while (!cursor.isAfterLast()) {
-                            String texto = cursor.getString(cursor.getColumnIndex(QuestoesDbSchema.QuestoesTbl.Cols.TEXTO_QUESTAO));
-                            Log.i("MSGS", texto);
+                            // Recuperar os dados da resposta
+                            String uuidQuestao = cursor.getString(cursor.getColumnIndex(RespostasDbSchema.RespostasTable.Cols.UUID_QUESTAO));
+                            int respostaCorreta = cursor.getInt(cursor.getColumnIndex(RespostasDbSchema.RespostasTable.Cols.RESPOSTA_CORRETA));
+                            int respostaOferecida = cursor.getInt(cursor.getColumnIndex(RespostasDbSchema.RespostasTable.Cols.RESPOSTA_OFERECIDA));
+                            int colou = cursor.getInt(cursor.getColumnIndex(RespostasDbSchema.RespostasTable.Cols.COLOU));
 
-                            mTextViewQuestoesArmazenadas.append(texto + "\n");
+                            // Montar a string para exibição
+                            String textoResposta = "Questão: " + uuidQuestao +
+                                    ", Correto: " + (respostaCorreta == 1 ? "Sim" : "Não") +
+                                    ", Resposta: " + (respostaOferecida == 1 ? "Verdadeiro" : "Falso") +
+                                    ", Colou: " + (colou == 1 ? "Sim" : "Não");
+
+                            // Exibir as respostas
+                            builder.append(textoResposta).append("\n");
+
                             cursor.moveToNext();
                         }
-                    } finally {
-                        cursor.close();
+
+                        // Adicionar o conteúdo ao TextView
+                        mTextViewQuestoesArmazenadas.setText(builder.toString());
                     }
-                } else
-                    Log.i("MSGS", "cursor nulo!");
+
+                    cursor.close(); // Fechar o cursor após o uso
+                } else {
+                    Log.i("MSGS", "Cursor nulo!");
+                }
             }
         });
+
+
         mBotaoDeleta = (Button) findViewById(R.id.botao_deleta);
         mBotaoDeleta.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                /*
-                  Acesso ao SQLite
-                */
-                if (mQuestoesDb != null) {
-                    mQuestoesDb.removeBanco();
-                    if (mTextViewQuestoesArmazenadas == null) {
-                        mTextViewQuestoesArmazenadas = (TextView) findViewById(R.id.texto_questoes_a_apresentar);
-                    }
-                    mTextViewQuestoesArmazenadas.setText("");
+            public void onClick(View v) {
+                if (mRespostaDB != null) {
+                    // Deletar todas as respostas
+                    mRespostaDB.deleteAllRespostas();
+
+                    // Feedback visual
+                    mTextViewQuestoesArmazenadas.setText("Respostas deletadas.");
+                    Toast.makeText(MainActivity.this, "Respostas deletadas", Toast.LENGTH_SHORT).show();
                 }
             }
         });
+
 
     }
 
@@ -181,6 +185,8 @@ public class MainActivity extends AppCompatActivity {
     private void verificaResposta(boolean respostaPressionada) {
         boolean respostaCorreta = mBancoDeQuestoes[mIndiceAtual].isRespostaCorreta();
         int idMensagemResposta = 0;
+
+        mRespostaDB.addResposta(mBancoDeQuestoes[mIndiceAtual].getId().toString(), respostaCorreta, respostaPressionada, mEhColador);
 
         if (mEhColador) {
             idMensagemResposta = R.string.toast_julgamento;

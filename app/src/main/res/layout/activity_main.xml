@@ -55,14 +55,8 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/botao_cadastra"
-            android:layout_width="127dp"
-            android:layout_height="wrap_content"
-            android:text="Cadastra" />
-
-        <Button
             android:id="@+id/botao_mostra_questoes"
-            android:layout_width="wrap_content"
+            android:layout_width="208dp"
             android:layout_height="wrap_content"
             android:text="Mostra" />
 
